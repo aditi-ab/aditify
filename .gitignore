@@ -1,0 +1,17 @@
+node_modules/
+**/node_modules/
+**/dist/
+**/bin/
+**/obj/
+artifacts/
+.artifacts/
+.vs/
+.idea/
+TestResults/
+coverage/
+*.user
+*.suo
+*.tsbuildinfo
+.env
+.env.*
+!.env.example

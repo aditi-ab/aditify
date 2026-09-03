@@ -1,0 +1,22 @@
+{
+  "name": "aditify-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "workspaces": ["Ui", "Identity", "Catalog"],
+  "scripts": {
+    "build": "yarn workspace @aditify/ui build && yarn workspace @aditify/identity build",
+    "dev:catalog": "yarn workspace @aditify/ui build && yarn workspace @aditify/catalog dev",
+    "build:catalog": "yarn workspace @aditify/ui build && yarn workspace @aditify/catalog build",
+    "lint": "yarn workspace @aditify/ui lint && yarn workspace @aditify/identity lint && yarn workspace @aditify/catalog lint",
+    "lint:fix": "yarn workspace @aditify/ui lint:fix && yarn workspace @aditify/identity lint:fix && yarn workspace @aditify/catalog lint:fix",
+    "test": "yarn workspace @aditify/ui build && yarn workspace @aditify/ui test && yarn workspace @aditify/identity test && yarn workspace @aditify/catalog test",
+    "type-check": "yarn workspace @aditify/ui build && yarn workspace @aditify/ui type-check && yarn workspace @aditify/identity type-check && yarn workspace @aditify/catalog type-check"
+  },
+  "resolutions": {
+    "eslint-plugin-jsdoc": "62.8.0",
+    "eslint-plugin-regexp": "3.1.0",
+    "nopt": "7.2.1",
+    "vue": "3.5.41"
+  }
+}

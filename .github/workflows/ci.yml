@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source and history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan Git history for secrets
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 git --no-banner /repo
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - name: Enable Yarn
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Validate JavaScript packages
+        run: yarn lint && yarn type-check && yarn test && yarn build && yarn build:catalog
+      - name: Test ASP.NET Core package
+        run: dotnet test Identity.AspNetCore.Tests/Aditify.Identity.AspNetCore.Tests.csproj -c Release
+      - name: Pack ASP.NET Core package
+        run: dotnet pack Identity.AspNetCore/Aditify.Identity.AspNetCore.csproj -c Release -o artifacts
+
+  container:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'workflow_dispatch'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/aditify-catalog
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      - name: Build and optionally publish catalog image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Catalog/Dockerfile
+          push: ${{ github.event_name == 'workflow_dispatch' }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=aditify-catalog
+          cache-to: type=gha,mode=max,scope=aditify-catalog
+
+  publish-npm:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_VERSION: 0.1.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@latest yarn@1.22.22
+      - run: yarn install --frozen-lockfile && yarn build
+      - name: Set release version
+        run: node scripts/set-release-version.mjs "$RELEASE_VERSION"
+      - name: Publish UI
+        run: npm view "@aditify/ui@$RELEASE_VERSION" version >/dev/null 2>&1 || npm publish ./Ui --access public
+      - name: Publish identity
+        run: npm view "@aditify/identity@$RELEASE_VERSION" version >/dev/null 2>&1 || npm publish ./Identity --access public
